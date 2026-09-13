@@ -1,4 +1,4 @@
-const C='szamlaapp-render-v5';
+const C='szamlaapp-render-v6';
 self.addEventListener('install',e=>{self.skipWaiting();e.waitUntil(caches.open(C).then(c=>c.addAll(['./','./index.html','./manifest.json'])))});
 self.addEventListener('activate',e=>{e.waitUntil(Promise.all([caches.keys().then(k=>Promise.all(k.filter(x=>x!==C).map(x=>caches.delete(x)))),self.clients.claim()]))});
 async function transformHtml(r){
@@ -22,6 +22,11 @@ function render(){ensureRecurringTransfers();`;
   t=t.replace('let templateOnly=regular && !obj.number && obj.amount===null && !obj.due;','let templateOnly=regular && !obj.number;');
   t=t.replace('Rendszeres számla?','Rendszeres?');
   t=t.replace('Rendszeres tételnél elég a partner neve és a gyakoriság. A többi adat később is megadható.','Rendszeres utalás minden esedékes hónap 1-jén megjelenik. A rögzített fizetési határidőt viszi tovább.');
+
+  // A havi/negyedéves sablonból létrejött aktuális tétel javításakor az összeg mindig szerkeszthető.
+  // A módosítás csak az adott havi tételt érinti; a rendszeres sablon összege változatlan marad.
+  t=t.replace(/function editInvoice\(id\)\{let x=data\.find\(a=>a\.id===id\);editId=id;expectedSourceId=null;[\s\S]*?\$\("modal"\)\.classList\.add\("on"\)\}/,
+`function editInvoice(id){let x=data.find(a=>a.id===id);editId=id;expectedSourceId=null;let occurrence=!!x.seriesId;$("formTitle").textContent=occurrence?"Aktuális tétel javítása":(x.templateOnly?"Rendszeres tétel javítása":"Számla javítása");$("partner").disabled=false;$("partner").value=x.partner;$("number").value=x.number||"";$("amount").value=x.amount??"";$("currency").value=x.currency||"HUF";$("due").value=x.due||"";$("isRegular").checked=occurrence?false:!!x.regular;$("isRegular").disabled=occurrence;$("frequency").value=x.frequency||"monthly";if($("regNoAmount")){if(x.amount===null||x.amount===undefined||x.amount==="")$("regNoAmount").checked=true;else $("regWithAmount").checked=true;}updateRequiredFields();if(occurrence){$("amount").disabled=false;$("amount").required=true;$("freqWrap").style.display="none";$("regularHint").style.display="none";}$("autoDate").textContent=(x.templateOnly?"Rögzítve: ":"Beérkezés: ")+hd(x.arrival);$("modal").classList.add("on")}`);
 
   const h=new Headers(r.headers);h.set('content-type','text/html; charset=utf-8');
   return new Response(t,{status:r.status,statusText:r.statusText,headers:h});
