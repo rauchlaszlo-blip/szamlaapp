@@ -13,8 +13,8 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(DriveBackupPlugin.class);
         super.onCreate(savedInstanceState);
 
-        View webView = getBridge().getWebView();
-        ViewCompat.setOnApplyWindowInsetsListener(webView, (view, windowInsets) -> {
+        View contentView = findViewById(android.R.id.content);
+        ViewCompat.setOnApplyWindowInsetsListener(contentView, (view, windowInsets) -> {
             Insets statusBars = windowInsets.getInsets(WindowInsetsCompat.Type.statusBars());
             view.setPadding(
                 view.getPaddingLeft(),
@@ -24,6 +24,6 @@ public class MainActivity extends BridgeActivity {
             );
             return windowInsets;
         });
-        ViewCompat.requestApplyInsets(webView);
+        ViewCompat.requestApplyInsets(contentView);
     }
 }
