@@ -1,7 +1,7 @@
 {
   "appId": "hu.rauch.szamlakezelo",
   "appName": "Számlakezelő",
-  "webDir": ".",
+  "webDir": "www",
   "server": {
     "androidScheme": "https"
   }
