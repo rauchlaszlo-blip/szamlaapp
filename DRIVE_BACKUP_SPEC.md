@@ -22,6 +22,7 @@ Tartalom:
   "app": "Számlakezelő",
   "schemaVersion": 1,
   "savedAt": "ISO-8601 timestamp",
+  "trialStartedAt": "ISO-8601 timestamp",
   "data": []
 }
 ```
@@ -30,9 +31,15 @@ Tartalom:
 - Helyi és Drive mentés is tartalmaz időbélyeget.
 - Automatikus visszaállítás nem írhat felül frissebb helyi adatot kérdés nélkül.
 - Visszaállítás előtt helyi biztonsági pillanatkép készül.
+- A próbaidő kezdete is bekerül a mentésbe; visszaállításkor a korábbi kezdőidő marad érvényes.
 
 ## Play modell
-Első kiadás: fizetős alkalmazás a Google Play Áruházban. Egyszeri vételár, nincs előfizetés és nincs appon belüli számlázási logika.
+- Ingyenes letöltés a Google Play Áruházból.
+- 30 napos teljes funkcionalitású próbaidő.
+- A próbaidő után egyszeri, nem fogyó vásárlás oldja fel végleg az appot.
+- Nincs előfizetés és nincs automatikus megújítás.
+- A vásárlás után az app korlátlan ideig használható az adott Google Play-fiókkal.
+- A próbaidő lejárta nem töröl adatot; az adatok megmaradnak.
 
 ## Android azonosító
 - App név: `Számlakezelő`
