@@ -1,0 +1,8 @@
+{
+  "appId": "hu.rauch.szamlakezelo",
+  "appName": "Számlakezelő",
+  "webDir": ".",
+  "server": {
+    "androidScheme": "https"
+  }
+}
