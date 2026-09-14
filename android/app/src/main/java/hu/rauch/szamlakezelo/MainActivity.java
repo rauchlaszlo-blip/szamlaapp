@@ -2,6 +2,7 @@ package hu.rauch.szamlakezelo;
 
 import android.os.Bundle;
 import android.view.View;
+import androidx.activity.OnBackPressedCallback;
 import androidx.core.graphics.Insets;
 import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowInsetsCompat;
@@ -12,6 +13,20 @@ public class MainActivity extends BridgeActivity {
     public void onCreate(Bundle savedInstanceState) {
         registerPlugin(DriveBackupPlugin.class);
         super.onCreate(savedInstanceState);
+
+        getOnBackPressedDispatcher().addCallback(this, new OnBackPressedCallback(true) {
+            @Override
+            public void handleOnBackPressed() {
+                bridge.getWebView().evaluateJavascript(
+                    "window.handleAndroidBack ? window.handleAndroidBack() : false",
+                    handled -> {
+                        if (!"true".equals(handled)) {
+                            finish();
+                        }
+                    }
+                );
+            }
+        });
 
         View contentView = findViewById(android.R.id.content);
         ViewCompat.setOnApplyWindowInsetsListener(contentView, (view, windowInsets) -> {
