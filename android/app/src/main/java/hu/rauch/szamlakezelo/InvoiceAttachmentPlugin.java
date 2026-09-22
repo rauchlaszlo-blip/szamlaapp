@@ -8,6 +8,10 @@ import android.database.Cursor;
 import android.net.Uri;
 import android.provider.MediaStore;
 import android.provider.OpenableColumns;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
+import android.graphics.pdf.PdfRenderer;
+import android.os.ParcelFileDescriptor;
 import androidx.activity.result.ActivityResult;
 import androidx.core.content.FileProvider;
 import com.getcapacitor.JSArray;
@@ -17,6 +21,11 @@ import com.getcapacitor.PluginCall;
 import com.getcapacitor.PluginMethod;
 import com.getcapacitor.annotation.ActivityCallback;
 import com.getcapacitor.annotation.CapacitorPlugin;
+import com.google.android.gms.tasks.Tasks;
+import com.google.mlkit.vision.common.InputImage;
+import com.google.mlkit.vision.text.TextRecognition;
+import com.google.mlkit.vision.text.TextRecognizer;
+import com.google.mlkit.vision.text.latin.TextRecognizerOptions;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.InputStream;
@@ -24,11 +33,77 @@ import java.util.UUID;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.Set;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 @CapacitorPlugin(name = "InvoiceAttachment")
 public class InvoiceAttachmentPlugin extends Plugin {
     private static final long MAX_FILE_SIZE = 20L * 1024L * 1024L;
+    private static final ExecutorService OCR_EXECUTOR = Executors.newSingleThreadExecutor();
     private File pendingCameraFile;
+
+    @PluginMethod
+    public void recognizeText(PluginCall call) {
+        final String fileName = call.getString("fileName");
+        final String mimeType = call.getString("mimeType", "");
+        OCR_EXECUTOR.execute(() -> {
+            TextRecognizer recognizer = null;
+            try {
+                File file = resolveStoredFile(fileName);
+                if (!file.exists()) throw new Exception("A csatolmány nem található.");
+                recognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS);
+                String text = "application/pdf".equals(mimeType)
+                    ? recognizePdf(file, recognizer)
+                    : recognizeImage(file, recognizer);
+                JSObject result = new JSObject();
+                result.put("text", text.trim());
+                call.resolve(result);
+            } catch (Exception error) {
+                call.reject(error.getMessage() == null ? "A szövegfelismerés nem sikerült." : error.getMessage(), error);
+            } finally {
+                if (recognizer != null) recognizer.close();
+            }
+        });
+    }
+
+    private String recognizeImage(File file, TextRecognizer recognizer) throws Exception {
+        Bitmap bitmap = BitmapFactory.decodeFile(file.getAbsolutePath());
+        if (bitmap == null) throw new Exception("A kép nem olvasható.");
+        try {
+            return Tasks.await(recognizer.process(InputImage.fromBitmap(bitmap, 0))).getText();
+        } finally {
+            bitmap.recycle();
+        }
+    }
+
+    private String recognizePdf(File file, TextRecognizer recognizer) throws Exception {
+        StringBuilder output = new StringBuilder();
+        try (ParcelFileDescriptor descriptor = ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY);
+             PdfRenderer renderer = new PdfRenderer(descriptor)) {
+            int pages = Math.min(renderer.getPageCount(), 10);
+            for (int index = 0; index < pages; index++) {
+                try (PdfRenderer.Page page = renderer.openPage(index)) {
+                    float scale = Math.min(2.5f, 2200f / Math.max(page.getWidth(), page.getHeight()));
+                    int width = Math.max(1, Math.round(page.getWidth() * scale));
+                    int height = Math.max(1, Math.round(page.getHeight() * scale));
+                    Bitmap bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888);
+                    try {
+                        bitmap.eraseColor(android.graphics.Color.WHITE);
+                        page.render(bitmap, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY);
+                        String pageText = Tasks.await(recognizer.process(InputImage.fromBitmap(bitmap, 0))).getText();
+                        if (!pageText.trim().isEmpty()) {
+                            if (output.length() > 0) output.append("\n\n");
+                            output.append(pageText.trim());
+                        }
+                    } finally {
+                        bitmap.recycle();
+                    }
+                }
+            }
+            if (renderer.getPageCount() > 10) output.append("\n\n[Az első 10 oldal szövege]");
+        }
+        return output.toString();
+    }
 
     @PluginMethod
     @SuppressWarnings("deprecation")
