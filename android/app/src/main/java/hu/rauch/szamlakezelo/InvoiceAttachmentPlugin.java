@@ -12,6 +12,7 @@ import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.pdf.PdfRenderer;
 import android.os.ParcelFileDescriptor;
+import android.util.Base64;
 import androidx.activity.result.ActivityResult;
 import androidx.core.content.FileProvider;
 import com.getcapacitor.JSArray;
@@ -29,6 +30,7 @@ import com.google.mlkit.vision.text.latin.TextRecognizerOptions;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.InputStream;
+import java.io.ByteArrayOutputStream;
 import java.util.UUID;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
@@ -41,6 +43,53 @@ public class InvoiceAttachmentPlugin extends Plugin {
     private static final long MAX_FILE_SIZE = 20L * 1024L * 1024L;
     private static final ExecutorService OCR_EXECUTOR = Executors.newSingleThreadExecutor();
     private File pendingCameraFile;
+
+    @PluginMethod
+    public void getPreview(PluginCall call) {
+        OCR_EXECUTOR.execute(() -> {
+            try {
+                File file = resolveStoredFile(call.getString("fileName"));
+                String mimeType = call.getString("mimeType", "");
+                Bitmap bitmap = "application/pdf".equals(mimeType)
+                    ? renderPdfPreview(file) : decodePreviewImage(file);
+                ByteArrayOutputStream output = new ByteArrayOutputStream();
+                bitmap.compress(Bitmap.CompressFormat.JPEG, 88, output);
+                bitmap.recycle();
+                JSObject result = new JSObject();
+                result.put("dataUrl", "data:image/jpeg;base64," + Base64.encodeToString(output.toByteArray(), Base64.NO_WRAP));
+                call.resolve(result);
+            } catch (Exception error) {
+                call.reject("A számla előnézete nem készíthető el.", error);
+            }
+        });
+    }
+
+    private Bitmap decodePreviewImage(File file) throws Exception {
+        BitmapFactory.Options bounds = new BitmapFactory.Options();
+        bounds.inJustDecodeBounds = true;
+        BitmapFactory.decodeFile(file.getAbsolutePath(), bounds);
+        int sample = 1;
+        while (bounds.outWidth / sample > 2200 || bounds.outHeight / sample > 2200) sample *= 2;
+        BitmapFactory.Options options = new BitmapFactory.Options();
+        options.inSampleSize = sample;
+        Bitmap bitmap = BitmapFactory.decodeFile(file.getAbsolutePath(), options);
+        if (bitmap == null) throw new Exception("A kép nem olvasható.");
+        return bitmap;
+    }
+
+    private Bitmap renderPdfPreview(File file) throws Exception {
+        try (ParcelFileDescriptor descriptor = ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY);
+             PdfRenderer renderer = new PdfRenderer(descriptor)) {
+            if (renderer.getPageCount() == 0) throw new Exception("A PDF üres.");
+            try (PdfRenderer.Page page = renderer.openPage(0)) {
+                float scale = Math.min(3f, 2200f / Math.max(page.getWidth(), page.getHeight()));
+                Bitmap bitmap = Bitmap.createBitmap(Math.max(1, Math.round(page.getWidth() * scale)), Math.max(1, Math.round(page.getHeight() * scale)), Bitmap.Config.ARGB_8888);
+                bitmap.eraseColor(android.graphics.Color.WHITE);
+                page.render(bitmap, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY);
+                return bitmap;
+            }
+        }
+    }
 
     @PluginMethod
     public void recognizeText(PluginCall call) {
