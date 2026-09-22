@@ -21,11 +21,64 @@ import java.io.File;
 import java.io.FileOutputStream;
 import java.io.InputStream;
 import java.util.UUID;
+import java.util.ArrayList;
+import java.util.LinkedHashSet;
+import java.util.Set;
 
 @CapacitorPlugin(name = "InvoiceAttachment")
 public class InvoiceAttachmentPlugin extends Plugin {
     private static final long MAX_FILE_SIZE = 20L * 1024L * 1024L;
     private File pendingCameraFile;
+
+    @PluginMethod
+    @SuppressWarnings("deprecation")
+    public void consumeSharedFiles(PluginCall call) {
+        Intent intent = getActivity().getIntent();
+        JSArray files = new JSArray();
+        if (intent == null) {
+            JSObject empty = new JSObject();
+            empty.put("files", files);
+            call.resolve(empty);
+            return;
+        }
+
+        String action = intent.getAction();
+        Set<Uri> uris = new LinkedHashSet<>();
+        if (Intent.ACTION_SEND.equals(action)) {
+            Uri uri = intent.getParcelableExtra(Intent.EXTRA_STREAM);
+            if (uri != null) uris.add(uri);
+        } else if (Intent.ACTION_SEND_MULTIPLE.equals(action)) {
+            ArrayList<Uri> shared = intent.getParcelableArrayListExtra(Intent.EXTRA_STREAM);
+            if (shared != null) uris.addAll(shared);
+        } else if (Intent.ACTION_VIEW.equals(action) && intent.getData() != null) {
+            uris.add(intent.getData());
+        }
+
+        ClipData clip = intent.getClipData();
+        if (clip != null) {
+            for (int i = 0; i < clip.getItemCount(); i++) {
+                Uri uri = clip.getItemAt(i).getUri();
+                if (uri != null) uris.add(uri);
+            }
+        }
+
+        if (uris.isEmpty()) {
+            JSObject empty = new JSObject();
+            empty.put("files", files);
+            call.resolve(empty);
+            return;
+        }
+
+        try {
+            for (Uri uri : uris) files.put(copyIntoAppStorage(uri));
+            getActivity().setIntent(new Intent());
+            JSObject result = new JSObject();
+            result.put("files", files);
+            call.resolve(result);
+        } catch (Exception error) {
+            call.reject(error.getMessage() == null ? "A megosztott számla mentése nem sikerült." : error.getMessage(), error);
+        }
+    }
 
     @PluginMethod
     public void pickFiles(PluginCall call) {

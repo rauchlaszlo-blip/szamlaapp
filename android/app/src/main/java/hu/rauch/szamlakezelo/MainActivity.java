@@ -1,5 +1,6 @@
 package hu.rauch.szamlakezelo;
 
+import android.content.Intent;
 import android.os.Bundle;
 import android.view.View;
 import androidx.activity.OnBackPressedCallback;
@@ -41,5 +42,17 @@ public class MainActivity extends BridgeActivity {
             return windowInsets;
         });
         ViewCompat.requestApplyInsets(contentView);
+    }
+
+    @Override
+    protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        setIntent(intent);
+        if (bridge != null && bridge.getWebView() != null) {
+            bridge.getWebView().post(() -> bridge.getWebView().evaluateJavascript(
+                "window.dispatchEvent(new Event('invoice-share-received'))",
+                null
+            ));
+        }
     }
 }
