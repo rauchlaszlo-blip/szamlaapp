@@ -27,6 +27,10 @@ import com.google.mlkit.vision.common.InputImage;
 import com.google.mlkit.vision.text.TextRecognition;
 import com.google.mlkit.vision.text.TextRecognizer;
 import com.google.mlkit.vision.text.latin.TextRecognizerOptions;
+import com.tom_roush.pdfbox.android.PDFBoxResourceLoader;
+import com.tom_roush.pdfbox.io.MemoryUsageSetting;
+import com.tom_roush.pdfbox.pdmodel.PDDocument;
+import com.tom_roush.pdfbox.text.PDFTextStripper;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.InputStream;
@@ -127,10 +131,22 @@ public class InvoiceAttachmentPlugin extends Plugin {
 
     private String recognizePdf(File file, TextRecognizer recognizer) throws Exception {
         StringBuilder output = new StringBuilder();
-        try (ParcelFileDescriptor descriptor = ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY);
+        PDFBoxResourceLoader.init(getContext().getApplicationContext());
+        try (PDDocument document = PDDocument.load(file, MemoryUsageSetting.setupTempFileOnly());
+             ParcelFileDescriptor descriptor = ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY);
              PdfRenderer renderer = new PdfRenderer(descriptor)) {
             int pages = Math.min(renderer.getPageCount(), 10);
             for (int index = 0; index < pages; index++) {
+                PDFTextStripper stripper = new PDFTextStripper();
+                stripper.setStartPage(index + 1);
+                stripper.setEndPage(index + 1);
+                stripper.setSortByPosition(true);
+                String embedded = stripper.getText(document).trim();
+                if (embedded.codePoints().filter(Character::isLetterOrDigit).count() >= 8) {
+                    if (output.length() > 0) output.append("\n\n");
+                    output.append(embedded);
+                    continue;
+                }
                 try (PdfRenderer.Page page = renderer.openPage(index)) {
                     float scale = Math.min(2.5f, 2200f / Math.max(page.getWidth(), page.getHeight()));
                     int width = Math.max(1, Math.round(page.getWidth() * scale));
